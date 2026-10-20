@@ -15,13 +15,19 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Select newest Xcode
+        run: |
+          set -euo pipefail
+          echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app || true
+          NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Selecting $NEWEST"
+          sudo xcode-select -s "$NEWEST"
+          xcodebuild -version
 
       - name: Resolve Swift packages
         working-directory: apps/ios/Orange Cloud
@@ -33,7 +39,7 @@ jobs:
       - name: Build unsigned archive
         working-directory: apps/ios/Orange Cloud
         env:
-          EXTRA_COND: ${{ inputs.unlocked && 'OPENSOURCE_UNLOCKED' || '' }}
+          EXTRA_COND: ${{ inputs.unlocked == false && '' || 'OPENSOURCE_UNLOCKED' }}
         run: |
           set -o pipefail
           xcodebuild archive \
@@ -46,7 +52,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            SWIFT_ACTIVE_COMPILATION_CONDITIONS="\$(inherited) $EXTRA_COND" \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS="$EXTRA_COND" \
             | tee "$RUNNER_TEMP/xcodebuild.log"
           ls -la "$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications"
 
