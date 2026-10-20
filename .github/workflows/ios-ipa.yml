@@ -17,16 +17,23 @@ jobs:
   build:
     runs-on: macos-15
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - xcode: "26.0.1"
+            mode: "wholemodule"
+          - xcode: "26.3"
+            mode: "singlefile"
+    name: Xcode ${{ matrix.xcode }} / ${{ matrix.mode }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select newest Xcode
+      - name: Select Xcode ${{ matrix.xcode }}
         run: |
           set -euo pipefail
-          echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app || true
-          NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
-          echo "Selecting $NEWEST"
-          sudo xcode-select -s "$NEWEST"
+          ls -d /Applications/Xcode*.app || true
+          sudo xcode-select -s "/Applications/Xcode_${{ matrix.xcode }}.app"
           xcodebuild -version
 
       - name: Resolve Swift packages
@@ -52,6 +59,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
+            SWIFT_COMPILATION_MODE="${{ matrix.mode }}" \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS="$EXTRA_COND" \
             OTHER_SWIFT_FLAGS="-Xfrontend -solver-expression-time-threshold=1800000" \
             | tee "$RUNNER_TEMP/xcodebuild.log"
@@ -69,14 +77,15 @@ jobs:
           ls -lh OrangeCloud-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
-          name: OrangeCloud-ipa
+          name: ipa-${{ matrix.xcode }}-${{ matrix.mode }}
           path: ${{ runner.temp }}/OrangeCloud-unsigned.ipa
           retention-days: 30
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: xcodebuild-log
+          name: log-${{ matrix.xcode }}-${{ matrix.mode }}
           path: ${{ runner.temp }}/xcodebuild.log
           retention-days: 7
