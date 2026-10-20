@@ -1,0 +1,75 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      unlocked:
+        description: "Include OPENSOURCE_UNLOCKED (unlock all Pro features)"
+        type: boolean
+        default: true
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-ipa.yml'
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve Swift packages
+        working-directory: apps/ios/Orange Cloud
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project "Orange Cloud.xcodeproj" \
+            -scheme "Orange Cloud"
+
+      - name: Build unsigned archive
+        working-directory: apps/ios/Orange Cloud
+        env:
+          EXTRA_COND: ${{ inputs.unlocked && 'OPENSOURCE_UNLOCKED' || '' }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project "Orange Cloud.xcodeproj" \
+            -scheme "Orange Cloud" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/OrangeCloud.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS="\$(inherited) $EXTRA_COND" \
+            | tee "$RUNNER_TEMP/xcodebuild.log"
+          ls -la "$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications"
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP=$(find "$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -1)
+          echo "App: $APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qry OrangeCloud-unsigned.ipa Payload
+          ls -lh OrangeCloud-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OrangeCloud-ipa
+          path: ${{ runner.temp }}/OrangeCloud-unsigned.ipa
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          retention-days: 7
