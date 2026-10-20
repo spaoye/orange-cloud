@@ -26,7 +26,6 @@ jobs:
       XCODE_VER: "26.0.1"
       SOLVER_FLAGS: >-
         -Xfrontend -solver-expression-time-threshold=3600000
-        -Xfrontend -solver-memory-threshold=2000000000
         -Xfrontend -solver-scope-threshold=500000
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +38,11 @@ jobs:
 
       - name: Ensure watchOS platform runtime
         run: |
-          xcodebuild -downloadPlatform watchOS || true
+          for i in 1 2 3; do
+            xcodebuild -downloadPlatform watchOS && break
+            echo "retry $i"; sleep 10
+          done
+          xcrun simctl runtime list || true
 
       - name: Resolve Swift packages
         working-directory: apps/ios/Orange Cloud
