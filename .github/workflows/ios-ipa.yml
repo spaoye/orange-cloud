@@ -16,25 +16,24 @@ on:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - xcode: "26.0.1"
-            mode: "wholemodule"
-          - xcode: "26.3"
-            mode: "singlefile"
-    name: Xcode ${{ matrix.xcode }} / ${{ matrix.mode }}
+    timeout-minutes: 90
+    env:
+      XCODE_VER: "26.0.1"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode ${{ matrix.xcode }}
+      - name: Select Xcode ${{ env.XCODE_VER }}
         run: |
           set -euo pipefail
           ls -d /Applications/Xcode*.app || true
-          sudo xcode-select -s "/Applications/Xcode_${{ matrix.xcode }}.app"
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VER}.app"
           xcodebuild -version
+
+      - name: Ensure watchOS platform runtime
+        run: |
+          set -x
+          xcodebuild -downloadPlatform watchOS || true
+          xcrun simctl runtime list || true
 
       - name: Resolve Swift packages
         working-directory: apps/ios/Orange Cloud
@@ -59,9 +58,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            SWIFT_COMPILATION_MODE="${{ matrix.mode }}" \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS="$EXTRA_COND" \
-            OTHER_SWIFT_FLAGS="-Xfrontend -solver-expression-time-threshold=1800000" \
             | tee "$RUNNER_TEMP/xcodebuild.log"
           ls -la "$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications"
 
@@ -79,13 +76,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: ipa-${{ matrix.xcode }}-${{ matrix.mode }}
+          name: OrangeCloud-ipa
           path: ${{ runner.temp }}/OrangeCloud-unsigned.ipa
           retention-days: 30
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: log-${{ matrix.xcode }}-${{ matrix.mode }}
+          name: xcodebuild-log
           path: ${{ runner.temp }}/xcodebuild.log
           retention-days: 7
