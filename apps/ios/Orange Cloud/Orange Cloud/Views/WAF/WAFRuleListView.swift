@@ -37,6 +37,10 @@ struct WAFRuleListView: View {
     }
 
     var body: some View {
+        bodyStage3
+    }
+
+    private var bodyStage1: some View {
         listContent
         .background { SkyBackground() }
         .navigationTitle("WAF 防火墙")
@@ -53,6 +57,10 @@ struct WAFRuleListView: View {
                 }
             }
         }
+    }
+
+    private var bodyStage2: some View {
+        bodyStage1
         .sheet(isPresented: $showForm) {
             WAFRuleFormView(viewModel: viewModel, rule: nil)
         }
@@ -81,6 +89,10 @@ struct WAFRuleListView: View {
         } message: {
             Text("「跳过」等带额外参数的规则暂不支持在 App 内编辑，请在 Cloudflare Dashboard 中修改。")
         }
+    }
+
+    private var bodyStage3: some View {
+        bodyStage2
         .alert("权限不足", isPresented: $showDenied) {
             Button("好", role: .cancel) {}
         } message: {
@@ -96,6 +108,7 @@ struct WAFRuleListView: View {
             Text(viewModel.error ?? "")
         }
     }
+
 
     @ViewBuilder
     private var listContent: some View {

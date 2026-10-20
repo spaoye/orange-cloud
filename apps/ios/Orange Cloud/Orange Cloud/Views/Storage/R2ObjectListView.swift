@@ -42,6 +42,10 @@ struct R2ObjectListView: View {
     private var canWrite: Bool { auth.hasScope("workers-r2.write") }
 
     var body: some View {
+        bodyStage4
+    }
+
+    private var bodyStage1: some View {
         contentView
         .background { SkyBackground() }
         .navigationTitle(viewModel.displayTitle)
@@ -84,6 +88,10 @@ struct R2ObjectListView: View {
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .any(of: [.images, .videos]))
+    }
+
+    private var bodyStage2: some View {
+        bodyStage1
         .quickLookPreview($previewURL)
         .overlay {
             if viewModel.isDownloading {
@@ -108,6 +116,10 @@ struct R2ObjectListView: View {
                 Task { await uploadFile(url) }
             }
         }
+    }
+
+    private var bodyStage3: some View {
+        bodyStage2
         .sheet(item: $selectedObject) { object in
             R2ObjectDetailView(object: object, viewModel: viewModel, canWrite: canWrite)
                 .presentationDetents([.medium, .large])
@@ -145,6 +157,10 @@ struct R2ObjectListView: View {
         } message: {
             Text(viewModel.error ?? "")
         }
+    }
+
+    private var bodyStage4: some View {
+        bodyStage3
         .sensoryFeedback(.success, trigger: viewModel.didUpload)
         .sensoryFeedback(.success, trigger: viewModel.didTransfer)
         .sheet(item: $transferTarget) { request in
@@ -172,6 +188,7 @@ struct R2ObjectListView: View {
             }
         }
     }
+
 
     @ViewBuilder
     private var contentView: some View {
