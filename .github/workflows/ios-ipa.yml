@@ -4,29 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       unlocked:
-        description: "Include OPENSOURCE_UNLOCKED (unlock all Pro features)"
+        description: "Include OPENSOURCE_UNLOCKED (all Pro features)"
         type: boolean
         default: true
   push:
-    branches: [ main ]
     paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ios-ipa.yml'
+      - "apps/ios/**"
+      - ".github/workflows/ios-ipa.yml"
 
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: ["singlefile", "wholemodule"]
-    name: ${{ matrix.mode }}
     env:
       XCODE_VER: "26.0.1"
-      SOLVER_FLAGS: >-
-        -Xfrontend -solver-expression-time-threshold=3600000
-        -Xfrontend -solver-scope-threshold=500000
+      EXTRA_COND: ${{ inputs.unlocked == false && '' || 'OPENSOURCE_UNLOCKED' }}
+      SOLVER_FLAGS: "-Xfrontend -solver-expression-time-threshold=3600000 -Xfrontend -solver-scope-threshold=500000"
     steps:
       - uses: actions/checkout@v4
 
@@ -47,53 +39,38 @@ jobs:
       - name: Resolve Swift packages
         working-directory: apps/ios/Orange Cloud
         run: |
-          xcodebuild -resolvePackageDependencies \
-            -project "Orange Cloud.xcodeproj" \
-            -scheme "Orange Cloud"
+          xcodebuild -project "Orange Cloud.xcodeproj" -scheme "Orange Cloud" \
+            -resolvePackageDependencies -derivedDataPath "$RUNNER_TEMP/dd"
 
       - name: Build unsigned archive
         working-directory: apps/ios/Orange Cloud
-        env:
-          EXTRA_COND: ${{ inputs.unlocked == false && '' || 'OPENSOURCE_UNLOCKED' }}
         run: |
           set -o pipefail
-          xcodebuild archive \
-            -project "Orange Cloud.xcodeproj" \
-            -scheme "Orange Cloud" \
+          xcodebuild -project "Orange Cloud.xcodeproj" -scheme "Orange Cloud" \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/OrangeCloud.xcarchive" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" \
-            SWIFT_COMPILATION_MODE="${{ matrix.mode }}" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            SWIFT_COMPILATION_MODE=singlefile \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS="$EXTRA_COND" \
             OTHER_SWIFT_FLAGS="$SOLVER_FLAGS" \
-            | tee "$RUNNER_TEMP/xcodebuild.log"
-          ls -la "$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications"
+            archive
 
       - name: Package IPA
         run: |
           set -euo pipefail
-          APP=$(find "$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -1)
-          echo "App: $APP"
+          APP="$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications/Orange Cloud.app"
+          ls -d "$RUNNER_TEMP/OrangeCloud.xcarchive/Products/Applications/"*
           mkdir -p "$RUNNER_TEMP/Payload"
           cp -R "$APP" "$RUNNER_TEMP/Payload/"
           cd "$RUNNER_TEMP"
           zip -qry OrangeCloud-unsigned.ipa Payload
           ls -lh OrangeCloud-unsigned.ipa
 
-      - uses: actions/upload-artifact@v4
-        if: success()
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
         with:
-          name: ipa-${{ matrix.mode }}
+          name: OrangeCloud-unsigned-ipa
           path: ${{ runner.temp }}/OrangeCloud-unsigned.ipa
-          retention-days: 30
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: log-${{ matrix.mode }}
-          path: ${{ runner.temp }}/xcodebuild.log
-          retention-days: 7
+          retention-days: 14

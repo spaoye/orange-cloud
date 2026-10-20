@@ -42,19 +42,7 @@ struct R2ObjectListView: View {
     private var canWrite: Bool { auth.hasScope("workers-r2.write") }
 
     var body: some View {
-        Group {
-            if viewModel.isContentEmpty && viewModel.isLoading {
-                SkeletonList(rows: 9, trailing: true)
-            } else if viewModel.isContentEmpty && viewModel.currentPrefix.isEmpty {
-                ContentUnavailableView {
-                    Label("空存储桶", systemImage: "archivebox")
-                } description: {
-                    Text(canWrite ? String(localized: "点击右上角上传第一个文件") : String(localized: "这个存储桶里还没有对象"))
-                }
-            } else {
-                objectList
-            }
-        }
+        contentView
         .background { SkyBackground() }
         .navigationTitle(viewModel.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -184,6 +172,26 @@ struct R2ObjectListView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if viewModel.isContentEmpty && viewModel.isLoading {
+            SkeletonList(rows: 9, trailing: true)
+        } else if viewModel.isContentEmpty && viewModel.currentPrefix.isEmpty {
+            emptyState
+        } else {
+            objectList
+        }
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("空存储桶", systemImage: "archivebox")
+        } description: {
+            Text(canWrite ? String(localized: "点击右上角上传第一个文件") : String(localized: "这个存储桶里还没有对象"))
+        }
+    }
+
 
     /// 发起复制 / 移动：先过写权限与 300MB 体积守卫，再弹目标 Key 编辑表单
     private func startTransfer(_ object: R2Object, _ mode: TransferRequest.Mode) {

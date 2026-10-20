@@ -37,72 +37,7 @@ struct WAFRuleListView: View {
     }
 
     var body: some View {
-        Group {
-            if viewModel.isLoading && !viewModel.loaded {
-                SkeletonList(rows: 6, icon: .none, trailing: true)
-            } else if viewModel.rules.isEmpty {
-                ContentUnavailableView {
-                    Label("没有自定义规则", systemImage: "shield")
-                } description: {
-                    Text(canWrite
-                         ? String(localized: "点击右上角 + 创建第一条防火墙规则")
-                         : String(localized: "在 Cloudflare Dashboard → 安全性 → WAF 中创建自定义规则"))
-                } actions: {
-                    if canWrite {
-                        Button("添加规则") { showForm = true }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color.ocOrangePressed)
-                            .fontWeight(.bold)
-                    }
-                }
-            } else if filteredRules.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-            } else {
-                List {
-                    Section {
-                        ForEach(filteredRules) { rule in
-                            WAFRuleRow(
-                                rule: rule,
-                                canWrite: canWrite,
-                                isToggling: viewModel.togglingRuleId == rule.id,
-                                onToggle: { enabled in
-                                    Task { await viewModel.toggle(rule: rule, enabled: enabled) }
-                                },
-                                onDenied: { showDenied = true }
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                guard canWrite else { return }
-                                // skip 等带额外参数的动作不在表单支持范围，改动会丢参数
-                                if WAFRuleAction(rawValue: rule.action ?? "") != nil {
-                                    editingRule = rule
-                                } else {
-                                    showUnsupportedEdit = true
-                                }
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    if canWrite {
-                                        ruleToDelete = rule
-                                    } else {
-                                        showDenied = true
-                                    }
-                                } label: {
-                                    Label("删除", systemImage: "trash")
-                                }
-                            }
-                        }
-                    } footer: {
-                        Text(canWrite
-                             ? String(localized: "规则按从上到下的顺序执行，点按可编辑，左滑可删除。")
-                             : String(localized: "当前授权仅限读取（zone-waf.read），无法修改规则。"))
-                    }
-                    .glassRow()
-                }
-                .scrollContentBackground(.hidden)
-                .refreshable { await detachedRefresh { await viewModel.load() } }
-            }
-        }
+        listContent
         .background { SkyBackground() }
         .navigationTitle("WAF 防火墙")
         .navigationBarTitleDisplayMode(.inline)
@@ -161,6 +96,83 @@ struct WAFRuleListView: View {
             Text(viewModel.error ?? "")
         }
     }
+
+    @ViewBuilder
+    private var listContent: some View {
+        if viewModel.isLoading && !viewModel.loaded {
+            SkeletonList(rows: 6, icon: .none, trailing: true)
+        } else if viewModel.rules.isEmpty {
+            emptyState
+        } else if filteredRules.isEmpty {
+            ContentUnavailableView.search(text: searchText)
+        } else {
+            rulesList
+        }
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("没有自定义规则", systemImage: "shield")
+        } description: {
+            Text(canWrite
+                 ? String(localized: "点击右上角 + 创建第一条防火墙规则")
+                 : String(localized: "在 Cloudflare Dashboard → 安全性 → WAF 中创建自定义规则"))
+        } actions: {
+            if canWrite {
+                Button("添加规则") { showForm = true }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.ocOrangePressed)
+                    .fontWeight(.bold)
+            }
+        }
+    }
+
+    private var rulesList: some View {
+        List {
+            Section {
+                ForEach(filteredRules) { rule in
+                    WAFRuleRow(
+                        rule: rule,
+                        canWrite: canWrite,
+                        isToggling: viewModel.togglingRuleId == rule.id,
+                        onToggle: { enabled in
+                            Task { await viewModel.toggle(rule: rule, enabled: enabled) }
+                        },
+                        onDenied: { showDenied = true }
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard canWrite else { return }
+                        // skip 等带额外参数的动作不在表单支持范围，改动会丢参数
+                        if WAFRuleAction(rawValue: rule.action ?? "") != nil {
+                            editingRule = rule
+                        } else {
+                            showUnsupportedEdit = true
+                        }
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            if canWrite {
+                                ruleToDelete = rule
+                            } else {
+                                showDenied = true
+                            }
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                    }
+                }
+            } footer: {
+                Text(canWrite
+                     ? String(localized: "规则按从上到下的顺序执行，点按可编辑，左滑可删除。")
+                     : String(localized: "当前授权仅限读取（zone-waf.read），无法修改规则。"))
+            }
+            .glassRow()
+        }
+        .scrollContentBackground(.hidden)
+        .refreshable { await detachedRefresh { await viewModel.load() } }
+    }
+
 }
 
 // MARK: - 新建 / 编辑规则表单
